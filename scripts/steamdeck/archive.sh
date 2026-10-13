@@ -8,8 +8,15 @@ cp -a .steamdeck/reports/. "$package/share/build-info/"
 cp -a .steamdeck/source-archives/. "$sources/"
 git archive --format=tar HEAD | tar -xf - -C "$sources"
 export STEAMDECK_SOURCE_DIR="$sources"
+export STEAMDECK_LICENSE_DIR="$package/share/licenses/application-submodules"
 # shellcheck disable=SC2016 # These variables belong to git's submodule shell.
-git submodule foreach --recursive 'mkdir -p "$STEAMDECK_SOURCE_DIR/$displaypath"; git archive --format=tar HEAD | tar -xf - -C "$STEAMDECK_SOURCE_DIR/$displaypath"'
+git submodule foreach --recursive '
+  mkdir -p "$STEAMDECK_SOURCE_DIR/$displaypath" "$STEAMDECK_LICENSE_DIR/$displaypath"
+  git archive --format=tar HEAD | tar -xf - -C "$STEAMDECK_SOURCE_DIR/$displaypath"
+  find . -type f -not -path "*/.git/*" \
+    \( -iname "*license*" -o -iname "*copying*" -o -iname "*copyright*" \) \
+    -exec cp --parents -t "$STEAMDECK_LICENSE_DIR/$displaypath" {} +
+'
 python3 - "$package/share/dependency-manifest.json" > "$sources/ubuntu-source-packages.txt" <<'PY'
 import json, sys
 m = json.load(open(sys.argv[1]))
@@ -18,7 +25,7 @@ for name, version in sorted({(p['source_package'], p['source_version']) for p in
 PY
 mkdir -p "$sources/ubuntu"
 while IFS= read -r spec; do
-  (cd "$sources/ubuntu" && apt-get source --download-only "$spec")
+  (cd "$sources/ubuntu" && apt-get -o Acquire::Retries=3 source --download-only "$spec")
 done < "$sources/ubuntu-source-packages.txt"
 # Qt's SDK supplies ICU as a separate dependency. Redistribute its matching release source.
 icu_so=$(find "$QT_ROOT/lib" -maxdepth 1 -type f -name 'libicuuc.so.*' | head -1)
@@ -28,10 +35,16 @@ if [[ -n $icu_so ]]; then
   [[ $version == 73.2 ]] || { echo "Review corresponding ICU source version: $version"; exit 1; }
   curl -fL --retry 3 https://github.com/unicode-org/icu/releases/download/release-73-2/icu4c-73_2-src.tgz \
     -o "$sources/icu4c-73_2-src.tgz"
+  printf '%s  %s\n' \
+    818a80712ed3caacd9b652305e01afc7fa167e6f2e94996da44b90c2ab604ce1 \
+    "$sources/icu4c-73_2-src.tgz" | sha256sum -c -
   tar -xOf "$sources/icu4c-73_2-src.tgz" icu/LICENSE > "$package/share/licenses/ICU-LICENSE"
 fi
 cp "$package/share/dependency-manifest.json" "$sources/"
-cp -a .steamdeck/reports "$sources/build-reports"
+mkdir -p "$sources/build-reports"
+# Do not copy a previous run's checksum report into the tree being hashed.
+tar --exclude='./source-checksums.txt' -C .steamdeck/reports -cf - . \
+  | tar -xf - -C "$sources/build-reports"
 cat > "$package/share/licenses/REDISTRIBUTION.txt" <<'EOF'
 Artemis is free software under GPL version 3; see Artemis-LICENSE (or LICENSE).
 This package uses dynamically linked Qt 6.8.3 (LGPLv3/GPLv3), FFmpeg 6.1.4
@@ -50,7 +63,13 @@ plugins/ and rebuild the application. There is no signature lock. No additional
 restriction on reverse engineering for debugging modified libraries is imposed.
 Third-party components retain their own licenses. No warranty is provided.
 EOF
-find "$sources" -type f -print0 | sort -z | xargs -0 sha256sum > .steamdeck/reports/source-checksums.txt
+(
+  cd "$sources"
+  find . -type f ! -path './SHA256SUMS' ! -path './build-reports/source-checksums.txt' -print0 \
+    | sort -z | xargs -0 sha256sum
+) > .steamdeck/reports/source-checksums.txt
+cp .steamdeck/reports/source-checksums.txt "$sources/SHA256SUMS"
+cp .steamdeck/reports/source-checksums.txt "$package/share/build-info/source-checksums.txt"
 tar -C .steamdeck -czf dist/artemis-steamos-sources.tar.gz corresponding-sources
 tar -C dist -czf dist/artemis-steamos-x86_64.tar.gz artemis-steamos-x86_64
 (cd dist && sha256sum artemis-steamos-x86_64.tar.gz artemis-steamos-sources.tar.gz > SHA256SUMS)

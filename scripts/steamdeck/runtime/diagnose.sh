@@ -123,6 +123,33 @@ report() {
     else
         printf 'Optional lddtree is not installed.\n'
     fi
+    section 'Optional native PipeWire audio backend (advisory)'
+    printf '%s\n' 'The default SDL PulseAudio backend works with SteamOS PipeWire-Pulse.' \
+        'Native SDL PipeWire is opt-in and requires host libpipewire-0.3.so.0 plus matching host SPA modules.' \
+        'These host components are not bundled; their absence is not a package dependency failure.'
+    local ldconfig_tool cache_output pipewire_entries
+    ldconfig_tool=$(command -v ldconfig 2>/dev/null || true)
+    if [[ -z $ldconfig_tool ]]; then
+        for entry in /sbin/ldconfig /usr/sbin/ldconfig; do
+            if [[ -x $entry ]]; then
+                ldconfig_tool=$entry
+                break
+            fi
+        done
+    fi
+    if [[ -z $ldconfig_tool ]]; then
+        printf 'Host ldconfig is unavailable; optional native PipeWire availability is unknown.\n'
+    elif cache_output=$(host_tool "$ldconfig_tool" -p 2>/dev/null); then
+        pipewire_entries=$(printf '%s\n' "$cache_output" | awk '$1 == "libpipewire-0.3.so.0" { print }')
+        if [[ -n $pipewire_entries ]]; then
+            printf 'Host library cache entries:\n%s\n' "$pipewire_entries"
+            printf 'Cache presence does not validate native audio playback or matching SPA modules.\n'
+        else
+            printf 'Optional libpipewire-0.3.so.0 was not found in the host library cache.\n'
+        fi
+    else
+        printf 'The host library cache could not be read; optional native PipeWire availability is unknown.\n'
+    fi
     section 'Host VA-API (advisory)'
     if command -v vainfo >/dev/null 2>&1; then
         limited_host_tool vainfo --display drm 2>&1 || printf 'VA-API probe failed or timed out; inspect render-node permissions and host drivers.\n'

@@ -271,6 +271,16 @@ def main() -> None:
         "format": 1, "architecture": "x86_64", "glibc_ceiling": "2.35",
         "glibcxx_ceiling": "3.4.30", "cxxabi_ceiling": "1.3.13",
         "qt_version": "6.8.3", "host_sonames": sorted(host_required),
+        # SDL2 prefers PulseAudio by default. Native PipeWire is separately
+        # selected with SDL_AUDIODRIVER=pipewire and loads the host's client
+        # library/plugins. The same stable SONAME is present in Valve's 3.5
+        # and 3.8 repositories; its absence must not fail the default backend.
+        "optional_host_dlopen": [{
+            "soname": "libpipewire-0.3.so.0",
+            "purpose": "SDL native PipeWire audio (SDL_AUDIODRIVER=pipewire)",
+            "required": False,
+            "verified_repository_versions": {"SteamOS 3.5": "0.3.71", "SteamOS 3.8": "1.4.7"},
+        }],
         "host_library_patterns": HOST_PATTERNS, "required_libraries": REQUIRED_LIBRARIES,
         "statically_linked_packages": static_packages,
         "system_packages": sorted(package_records.values(), key=lambda item: item["binary_package"]),

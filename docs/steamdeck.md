@@ -81,6 +81,7 @@ Dans le fork GitHub, ouvrir **Actions → Steam Deck portable**, choisir une ex�
 Sur le Steam Deck en Desktop Mode, dans Konsole, depuis le dossier contenant l'archive :
 
 ```bash
+sha256sum -c SHA256SUMS
 tar -xzf artemis-steamos-x86_64.tar.gz
 cd artemis-steamos-x86_64
 ./diagnose.sh > artemis-diagnostics.txt 2>&1
@@ -149,7 +150,7 @@ Le script retire les fichiers installés, les anciennes copies du package et ses
 
 ## Workflow et critères de validation
 
-Le workflow indépendant est `.github/workflows/steamdeck-build.yml`. Il ne remplace pas les pipelines Windows et macOS. Il publie des artifacts, avec des permissions minimales, et possède un déclencheur manuel `workflow_dispatch`. GitHub exige que ce déclencheur soit enregistré sur la branche par défaut pour l'utiliser normalement. Les déclencheurs de branche et de pull request permettent aussi de vérifier les changements avant intégration.
+Le workflow indépendant est `.github/workflows/steamdeck-build.yml`. Il ne remplace pas les pipelines Windows et macOS. Il publie des artifacts, avec des permissions minimales, et possède un déclencheur manuel `workflow_dispatch`. Les changements pertinents poussés sur une branche `steamdeck/**` déclenchent également une compilation. Le déclenchement CLI avec `--ref steamdeck/portable-0.6.7` a aussi été vérifié sur la branche de travail avant fusion ; il permet de sélectionner cette révision pour un essai.
 
 Une fois le workflow disponible sur la branche par défaut :
 
@@ -160,7 +161,7 @@ gh run watch NUMERO_D_EXECUTION --repo Axel-al/temp
 gh run download NUMERO_D_EXECUTION --repo Axel-al/temp
 ```
 
-Les validations prévues contrôlent : les moteurs sélectionnés par qmake, les codecs FFmpeg, les fichiers requis, l'architecture x86_64, les entrées ELF `NEEDED`, `RPATH`/`RUNPATH`, la limite GLIBC, la résolution des dépendances et les plugins Qt. Le lancement minimal utilise un affichage virtuel et ne contacte aucun hôte de streaming. Il ne remplace pas les essais de connexion, d'accélération, de HDR, d'audio ou de manette. Consulter les rapports de l'exécution précise téléchargée pour ses résultats effectifs.
+Les validations contrôlent : les moteurs sélectionnés par qmake, les codecs FFmpeg, les fichiers requis, l'architecture x86_64, les entrées ELF `NEEDED`, `RPATH`/`RUNPATH`, les limites GLIBC/GLIBCXX/CXXABI, la résolution des dépendances et les plugins Qt. Les essais de lancement utilisent Qt offscreen et X11 avec Xvfb, avec un rendu logiciel, depuis un dossier déplacé et un compte utilisateur sans environnement de compilation. Ils ne contactent aucun hôte de streaming. Les dépendances ELF des plugins Wayland sont auditées, mais aucune session Wayland ou Gamescope réelle n'est lancée en CI. Ces vérifications ne remplacent pas les essais de connexion, d'accélération, de HDR, d'audio ou de manette. Consulter les rapports de l'exécution précise téléchargée pour ses résultats effectifs.
 
 Les versions applicatives, le conteneur et la date du snapshot Ubuntu sont fixés. Le manifeste enregistre les versions exactes des paquets Ubuntu copiés ainsi que les sommes SHA-256 des ELF. La mise à jour de cette base se fait explicitement dans le workflow. Ces contraintes facilitent la reconstruction, sans constituer une preuve de reproductibilité bit à bit de l'ensemble des outils et archives utilisés.
 
