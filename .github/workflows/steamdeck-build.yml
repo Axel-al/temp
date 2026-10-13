@@ -1,0 +1,113 @@
+name: Steam Deck portable
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['steamdeck/**']
+    paths: ['.github/workflows/steamdeck-build.yml', 'scripts/steamdeck/**', 'docs/steamdeck.md', 'app/**']
+  pull_request:
+    paths: ['.github/workflows/steamdeck-build.yml', 'scripts/steamdeck/**', 'docs/steamdeck.md']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: steamdeck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    # The runner only hosts Docker. Every compiler and packaging command runs in Jammy.
+    container: ubuntu:jammy-20250819@sha256:4e0171b9275e12d375863f2b3ae9ce00a4c53ddda176bd55868df97ac6f21a6e
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      QT_VERSION: 6.8.3
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install tools from a dated Ubuntu snapshot
+        run: |
+          cat > /etc/apt/sources.list <<'EOF'
+          deb https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy main universe multiverse restricted
+          deb https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy-updates main universe multiverse restricted
+          deb https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy-security main universe multiverse restricted
+          deb-src https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy main universe multiverse restricted
+          deb-src https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy-updates main universe multiverse restricted
+          deb-src https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy-security main universe multiverse restricted
+          EOF
+          # Bootstrap CA certificates from the image's signed HTTP apt transport.
+          sed -i 's|https://snapshot|http://snapshot|' /etc/apt/sources.list
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates
+          sed -i 's|http://snapshot|https://snapshot|' /etc/apt/sources.list
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git curl build-essential cmake ninja-build pkg-config python3-pip python3-venv \
+            nasm patchelf pax-utils file binutils xz-utils zstd zip unzip \
+            libssl-dev libopus-dev libdav1d-dev libva-dev libvdpau-dev \
+            libdrm-dev libgbm-dev libvulkan-dev libshaderc-dev glslang-dev liblcms2-dev \
+            libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev wayland-protocols \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev \
+            libx11-dev libx11-xcb-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev \
+            libxrandr-dev libxss-dev libxt-dev libxv-dev libxxf86vm-dev \
+            libxcb-cursor-dev libxcb-icccm4-dev libxcb-image0-dev libxcb-keysyms1-dev \
+            libxcb-render-util0-dev libxcb-xinerama0-dev libxcb-randr0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libxcb-sync-dev libxcb-dri3-dev \
+            libfontconfig1-dev libfreetype6-dev libharfbuzz-dev libibus-1.0-dev \
+            libspa-0.2-modules xvfb xauth fonts-dejavu-core mesa-utils vulkan-tools vainfo
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Prepare pinned application submodules
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git merge-base --is-ancestor afe2de7f2b24a2f6161f5672e8aa38450fa793ef HEAD
+          test "$(cat app/version.txt)" = 0.6.7
+          git submodule update --init --recursive -- moonlight-common-c/moonlight-common-c qmdnsengine/qmdnsengine h264bitstream/h264bitstream app/SDL_GameControllerDB
+          echo "QT_ROOT=$GITHUB_WORKSPACE/.steamdeck/qt/6.8.3/gcc_64" >> "$GITHUB_ENV"
+          echo "DEPS_PREFIX=$GITHUB_WORKSPACE/.steamdeck/prefix" >> "$GITHUB_ENV"
+          echo "ARTEMIS_BINARY=$GITHUB_WORKSPACE/.steamdeck/build/app/artemis" >> "$GITHUB_ENV"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: dependencies
+        with:
+          path: .steamdeck
+          key: steamos-jammy-qt683-${{ hashFiles('scripts/steamdeck/build-deps.sh') }}
+      - name: Build pinned dependencies and install Qt
+        if: steps.dependencies.outputs.cache-hit != 'true'
+        run: bash scripts/steamdeck/build-deps.sh
+      - name: Compile Artemis with required streaming backends
+        run: bash scripts/steamdeck/build-app.sh
+      - name: Bundle application, plugins and dependency closure
+        run: python3 scripts/steamdeck/package.py
+      - name: Audit ABI and run isolated GUI smoke tests
+        run: |
+          bash scripts/steamdeck/validate.sh
+          bash scripts/steamdeck/smoke-test.sh
+      - name: Collect corresponding sources and create archives
+        run: bash scripts/steamdeck/archive.sh
+      - name: Upload portable archive and corresponding sources
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: artemis-steamos-x86_64
+          path: |
+            dist/artemis-steamos-x86_64.tar.gz
+            dist/artemis-steamos-sources.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+      - name: Upload build and validation reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: steamdeck-build-reports
+          path: |
+            .steamdeck/reports/
+            dist/artemis-steamos-x86_64/share/build-info/
+          if-no-files-found: warn
+          retention-days: 30

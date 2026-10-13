@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Keep application libraries private to this process. GPU drivers stay on the host.
+set -euo pipefail
+
+source_path=${BASH_SOURCE[0]}
+while [[ -L "$source_path" ]]; do
+    source_dir=$(cd -P -- "$(dirname -- "$source_path")" && pwd)
+    source_path=$(readlink -- "$source_path")
+    [[ "$source_path" = /* ]] || source_path="$source_dir/$source_path"
+done
+app_dir=$(cd -P -- "$(dirname -- "$source_path")" && pwd)
+
+if [[ ! -x "$app_dir/bin/artemis" ]]; then
+    printf 'Artemis executable is missing: %s/bin/artemis\n' "$app_dir" >&2
+    exit 1
+fi
+
+# Never append the caller's library paths: Steam runtimes may contain incompatible Qt.
+export LD_LIBRARY_PATH="$app_dir/lib"
+export QT_PLUGIN_PATH="$app_dir/plugins"
+export QML_IMPORT_PATH="$app_dir/qml"
+export QML2_IMPORT_PATH="$app_dir/qml"
+unset QT_QPA_PLATFORM_PLUGIN_PATH
+
+# Honor an explicit user choice (including offscreen during CI). Prefer native
+# Wayland when available, with X11 as Qt's fallback. Do not change SDL's selection.
+if [[ -z ${QT_QPA_PLATFORM:-} ]]; then
+    if [[ -n ${WAYLAND_DISPLAY:-} ]]; then
+        export QT_QPA_PLATFORM='wayland;xcb'
+    elif [[ -n ${DISPLAY:-} ]]; then
+        export QT_QPA_PLATFORM=xcb
+    fi
+fi
+
+# Do not set LIBVA_DRIVERS_PATH, VK_ICD_FILENAMES, Mesa paths or renderer options.
+exec "$app_dir/bin/artemis" "$@"
