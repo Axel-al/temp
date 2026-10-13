@@ -87,7 +87,10 @@ def main() -> None:
         if not source.is_dir():
             return
         for entry in sorted(source.rglob("*")):
-            if entry.is_file() and not entry.name.endswith((".a", ".prl", ".la", ".debug")):
+            if entry.is_file() and not entry.name.endswith((".a", ".o", ".obj", ".prl", ".la", ".debug")):
+                # Qt ships build-only test resources beside its runtime QML.
+                if "test" in entry.relative_to(source).parts:
+                    continue
                 copy_file(entry, target / entry.relative_to(source))
 
     def copy_library(source: Path) -> None:
@@ -118,11 +121,16 @@ def main() -> None:
     required_platforms = ("libqxcb.so", "libqwayland-egl.so", "libqwayland-generic.so", "libqoffscreen.so")
     for name in required_platforms:
         copy_file(qt / "plugins/platforms" / name, OUT / "plugins/platforms" / name)
-    for group in ("imageformats", "iconengines", "platforminputcontexts", "platformthemes",
+    for group in ("imageformats", "iconengines", "platforminputcontexts",
                   "styles", "tls", "networkinformation", "xcbglintegrations",
                   "wayland-decoration-client", "wayland-graphics-integration-client",
                   "wayland-shell-integration"):
         copy_tree(qt / "plugins" / group, OUT / "plugins" / group)
+    # The application explicitly selects Qt Quick Material. Keep desktop portal
+    # integration when supplied, without importing an unrelated GTK runtime.
+    portal = qt / "plugins/platformthemes/libqxdgdesktopportal.so"
+    if portal.is_file():
+        copy_file(portal, OUT / "plugins/platformthemes" / portal.name)
     if not (OUT / "plugins/tls/libqopensslbackend.so").is_file():
         raise RuntimeError("Qt OpenSSL TLS backend is required")
     for module in ("QtQml/qmldir", "QtQuick/qmldir", "QtQuick/Controls/qmldir", "QtQuick/Layouts/qmldir"):

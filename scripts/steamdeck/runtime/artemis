@@ -21,6 +21,10 @@ export QT_PLUGIN_PATH="$app_dir/plugins"
 export QML_IMPORT_PATH="$app_dir/qml"
 export QML2_IMPORT_PATH="$app_dir/qml"
 unset QT_QPA_PLATFORM_PLUGIN_PATH
+# The upstream Gallium heuristic otherwise deprioritizes AMD VA-API. Prefer it
+# on the Deck while preserving capability checks, RFI workarounds and fallback.
+# FORCE_VAAPI=0 restores the original preference without disabling VA-API.
+export FORCE_VAAPI="${FORCE_VAAPI:-1}"
 
 # Honor an explicit user choice (including offscreen during CI). Prefer native
 # Wayland when available, with X11 as Qt's fallback. Do not change SDL's selection.

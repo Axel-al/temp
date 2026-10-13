@@ -44,6 +44,10 @@ La chaîne prioritaire sur GPU AMD est **décodage VA-API puis rendu Vulkan/libp
 | Audio | SDL2 et Opus présents | Sortie audio, coupures, synchronisation A/V |
 | Apollo/Sunshine | Protocole et code de connexion conservés | Appairage, audio/vidéo, commandes et reconnexion aux deux hôtes |
 
+Le lanceur définit par défaut `FORCE_VAAPI=1` : cela retire la dépriorisation historique de VA-API sur Gallium, sans retirer les autres décodeurs, les replis ou la protection RFI. `FORCE_VAAPI=0 ./artemis` restaure la préférence d'origine. Ce choix vise le GPU AMD du Deck et reste à tester ; il peut être moins adapté à un autre GPU. Aucun pilote ni mode HDR n'est forcé.
+
+Pour le premier essai matériel, sélectionner **Force hardware decoding**, le rendu préféré **Vulkan**, puis **H.264**, HDR désactivé, 1280×800 à 60 images/s. Vérifier dans les journaux de la session réelle `Renderer 'Vulkan (libplacebo)' with 'VAAPI' backend chosen`, puis essayer HEVC et répéter en Desktop/Gaming Mode. Tester ensuite le HDR avec un écran compatible. Le réglage Auto peut choisir EGL/OpenGL en SDR ; une simple détection de capacités au démarrage ne confirme pas le moteur employé pendant le streaming.
+
 ## Contenu et frontière avec le système hôte
 
 Après extraction :
