@@ -24,8 +24,9 @@ checkout() {
   printf '%s\t%s\t%s\n' "$name" "$url" "$revision" >> .steamdeck/reports/source-lock.tsv
   tar --exclude=.git -C .steamdeck/sources -czf ".steamdeck/source-archives/$name.tar.gz" "$name"
   mkdir -p "$DEPS_PREFIX/share/licenses/$name"
-  find ".steamdeck/sources/$name" -maxdepth 1 -type f \( -iname '*license*' -o -iname '*copying*' -o -iname '*copyright*' \) \
-    -exec cp -t "$DEPS_PREFIX/share/licenses/$name" {} +
+  (cd ".steamdeck/sources/$name" && find . -type f -not -path '*/.git/*' \
+    \( -iname '*license*' -o -iname '*copying*' -o -iname '*copyright*' \) -print0 | tar --null -T - -cf -) \
+    | tar -xf - -C "$DEPS_PREFIX/share/licenses/$name"
 }
 checkout SDL2 https://github.com/libsdl-org/SDL.git 5d249570393f7a37e037abf22cd6012a4cc56a71
 cmake -S .steamdeck/sources/SDL2 -B .steamdeck/sdl-build -G Ninja \
@@ -53,7 +54,7 @@ Version: 1.3.290
 Libs: -lvulkan
 Cflags: -I\${prefix}/include
 EOF
-checkout libplacebo https://github.com/haasn/libplacebo.git 9c4b6bbd7a1e223ffdd61affc4e5d463d42d4345
+checkout libplacebo https://github.com/haasn/libplacebo.git 1fd3c7bde7b943fe8985c893310b5269a09b46c5
 meson setup .steamdeck/placebo-build .steamdeck/sources/libplacebo \
   --prefix "$DEPS_PREFIX" --libdir lib --buildtype release -Ddefault_library=shared \
   -Dvulkan=enabled -Dshaderc=disabled -Dglslang=enabled -Dopengl=disabled -Ddemos=false -Dtests=false

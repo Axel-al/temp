@@ -201,6 +201,7 @@ def main() -> None:
     copy_tree(deps / "share/licenses", OUT / "share/licenses/build-dependencies")
     copy_tree(qt / "LICENSES", OUT / "share/licenses/Qt")
     copy_tree(REPO / ".steamdeck/reports", OUT / "share/build-info")
+    copy_file(REPO / ".steamdeck/reports/build-info.txt", OUT / "build-info.txt")
     for name in ("README.md", "SOURCES.md"):
         source = REPO / "docs/steamdeck" / name
         if source.is_file():
