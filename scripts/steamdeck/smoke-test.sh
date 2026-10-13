@@ -15,11 +15,12 @@ if [[ $(id -u) == 0 ]]; then
 fi
 # A different path, clean home, no SDK environment and deliberately hostile Qt paths.
 run_clean() {
-  "${as_user[@]}" env -i PATH=/usr/bin:/bin HOME="$work/home" XDG_RUNTIME_DIR="$work/runtime" \
+  "${as_user[@]}" env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$work/home" XDG_RUNTIME_DIR="$work/runtime" \
     QT_PLUGIN_PATH=/nonexistent QML_IMPORT_PATH=/nonexistent LD_LIBRARY_PATH=/nonexistent \
     "$@"
 }
-run_clean "$work/package/artemis" --version 2>&1 | tee .steamdeck/reports/version.txt
+run_clean env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  "$work/package/artemis" --version 2>&1 | tee .steamdeck/reports/version.txt
 grep -q '0.6.7' .steamdeck/reports/version.txt
 for platform in offscreen xcb; do
   set +e
@@ -41,7 +42,8 @@ for platform in offscreen xcb; do
 done
 # Exercise the user installer without touching the runner's real home.
 run_clean "$work/package/install.sh"
-run_clean "$work/home/.local/bin/artemis-steamos" --version
+run_clean env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+  "$work/home/.local/bin/artemis-steamos" --version
 run_clean "$work/package/install.sh"
 run_clean "$work/home/.local/opt/artemis-steamos/uninstall.sh"
 test ! -e "$work/home/.local/bin/artemis-steamos"
