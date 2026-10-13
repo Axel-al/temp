@@ -1,6 +1,6 @@
 # Artemis 0.6.7 : archive portable pour SteamOS
 
-Ce build part du commit officiel `afe2de7f2b24a2f6161f5672e8aa38450fa793ef`, correspondant à `0.6.7-dev.20250831.0017`. Il produit une application Linux **x86_64 native** et son environnement applicatif dans `artemis-steamos-x86_64.tar.gz`. L'installation reste dans le dossier personnel ; aucun `sudo`, changement de partition système ou remplacement de bibliothèque SteamOS n'est nécessaire.
+Ce build part du commit officiel `afe2de7f2b24a2f6161f5672e8aa38450fa793ef`, correspondant à `0.6.7-dev.20250831.0017`. Le code conserve sa version interne `0.6.7` ; les métadonnées du package permettent de retrouver la référence d'origine et la révision exacte construite. Il produit une application Linux **x86_64 native** et son environnement applicatif dans `artemis-steamos-x86_64.tar.gz`. L'installation reste dans le dossier personnel ; aucun `sudo`, changement de partition système ou remplacement de bibliothèque SteamOS n'est nécessaire.
 
 Une exécution GitHub Actions réussie valide la compilation, le contenu et le lancement minimal du package. **Elle ne valide pas une session de streaming sur Steam Deck.** SteamOS 3.8.28 est la version de référence communiquée par l'utilisateur, pas une version à laquelle le programme est lié.
 
@@ -8,7 +8,9 @@ Une exécution GitHub Actions réussie valide la compilation, le contenu et le l
 
 La cible minimale envisagée est **SteamOS 3.5 sur Steam Deck**, sous réserve des essais matériels décrits plus bas. La barrière ABI du package est **GLIBC ≤ 2.35** pour chaque ELF embarqué. Les bibliothèques GLIBC restent celles du système hôte. Le [dépôt historique SteamOS `core-3.5`](https://steamdeck-packages.steamos.cloud/archlinux-mirror/core-3.5/os/x86_64/) contient GLIBC 2.37 et les bibliothèques GCC 13.1.1 : cela justifie cette base ABI, mais ne démontre pas à lui seul la compatibilité complète du système graphique ou audio.
 
-La compilation utilise Ubuntu 22.04. Compiler directement sur Ubuntu 24.04 pourrait introduire des symboles GLIBC 2.39 et exclure cette base. Les versions récentes de FFmpeg et SDL sont donc construites sur l'environnement plus ancien. Les dépendances copiées et les plugins sont également examinés : vérifier uniquement l'exécutable principal serait insuffisant.
+La compilation utilise le conteneur Ubuntu 22.04 `jammy-20250819`, fixé par digest SHA-256 dans le workflow, et les dépôts Ubuntu figés au `20250901T000000Z`. Ubuntu 24.04 sert uniquement de machine d'accueil au conteneur. Compiler directement sur cet hôte pourrait introduire des symboles GLIBC 2.39 et exclure cette base. Les versions récentes de FFmpeg et SDL sont donc construites dans l'environnement plus ancien. Les dépendances copiées et les plugins sont également examinés : vérifier uniquement l'exécutable principal serait insuffisant.
+
+La bibliothèque C++ `libstdc++` reste celle de SteamOS, notamment pour ne pas imposer une ancienne version aux pilotes GPU récents. Le contrôle ABI refuse les exigences supérieures à **GLIBCXX 3.4.30** et **CXXABI 1.3.13**, en complément du plafond GLIBC 2.35.
 
 Qt 6.8 prend en charge Ubuntu 22.04 x86_64 et sa documentation indique GLIBC 2.28 pour les binaires Linux x86_64. La remarque Ubuntu 24.04/GLIBC 2.39 de la même page concerne les binaires Linux **ARM**. Les exigences réelles des fichiers Qt 6.8.3 déployés restent contrôlées par le workflow. Voir les [plateformes Qt 6.8](https://doc.qt.io/qt-6.8/supported-platforms.html).
 
@@ -24,11 +26,12 @@ La portabilité repose sur les ABI Linux et les bibliothèques graphiques publiq
 | SDL2 | 2.32.10 | Fenêtres, audio et manettes |
 | SDL2_ttf | 2.24.0 | Texte des surimpressions |
 | libplacebo | 7.349.0 | Rendu Vulkan, couleurs et HDR |
+| glslang / SPIRV-Tools | 11.8.0 / version du snapshot Ubuntu | Compilation des shaders, liés statiquement aux composants concernés |
 | Opus et bibliothèques annexes | Versions consignées dans le manifeste | Audio et dépendances transitives |
 
 Le code de référence possède déjà des adaptations aux API FFmpeg 6 et 7. Le passage à FFmpeg 6.1.4 ne nécessite donc pas de désactiver les fonctions de streaming ni de conserver `libavcodec.so.58`. Les bibliothèques FFmpeg de cette archive proviennent de sa propre compilation ; une version FFmpeg installée par SteamOS n'est pas utilisée pour les remplacer.
 
-La chaîne prioritaire sur GPU AMD est **décodage VA-API puis rendu Vulkan/libplacebo**, avec les autres chemins du code conservés. Les vérifications de compilation exigent la présence de VA-API, DRM, EGL, X11, Wayland et libplacebo. L'absence d'une dépendance obligatoire doit faire échouer le build, au lieu de retirer silencieusement le moteur correspondant.
+La chaîne prioritaire sur GPU AMD est **décodage VA-API puis rendu Vulkan/libplacebo**, avec les autres chemins du code conservés. Les vérifications de compilation exigent la présence de VA-API, DRM, EGL, X11, Wayland et libplacebo. L'absence d'une dépendance obligatoire doit faire échouer le build, au lieu de retirer silencieusement le moteur correspondant. La présence de VA-API dans le binaire ne prouve pas qu'une session donnée utilise effectivement le décodage matériel.
 
 | Fonction | Ce que la compilation peut établir | À confirmer sur le Steam Deck |
 | --- | --- | --- |
@@ -63,13 +66,13 @@ artemis-steamos-x86_64/
 
 Le package inclut notamment Qt, FFmpeg, SDL2, SDL2_ttf, Opus, libplacebo, OpenSSL et les dépendances applicatives nécessaires. Le manifeste fait foi pour la liste exacte, leurs versions et leur origine. La collecte suit les dépendances ELF transitives et traite séparément les plugins Qt chargés à l'exécution.
 
-GLIBC, le chargeur ELF, les pilotes Mesa/RADV/VA-API et les composants graphiques devant suivre ces pilotes restent fournis par SteamOS. Le package n'impose aucun fichier ICD Vulkan, pilote Radeon ni chemin Mesa. Les bibliothèques faisant partie de cette frontière hôte sont consignées dans le manifeste ; un contrôle de liens réussi sur Ubuntu ne prouve pas leur présence sur chaque autre distribution.
+GLIBC, le chargeur ELF, `libstdc++`, les pilotes Mesa/RADV/VA-API et les composants graphiques devant suivre ces pilotes restent fournis par SteamOS. Les interfaces Wayland et les interfaces centrales XCB/X11 restent aussi côté hôte, afin qu'une ancienne bibliothèque embarquée ne masque pas un symbole nécessaire aux pilotes récents. Les bibliothèques auxiliaires XCB nécessaires à Qt sont embarquées lorsqu'elles ne font pas partie de cette frontière. Le package n'impose aucun fichier ICD Vulkan, pilote Radeon ni chemin Mesa. La liste exacte des bibliothèques hôtes figure dans le manifeste ; un contrôle de liens réussi sur Ubuntu ne prouve pas leur présence sur chaque autre distribution.
 
 Les chemins ELF relatifs à `$ORIGIN` permettent de déplacer le dossier complet. Le lanceur définit les chemins de bibliothèques et de plugins pour son processus, sans les ajouter à la configuration du compte. Utiliser **`./artemis`**, et non `./bin/artemis`, pour bénéficier de cet environnement. Les bibliothèques restent partagées et remplaçables dans le dossier de l'application.
 
 ## Télécharger et installer
 
-Dans le fork GitHub, ouvrir **Actions → Steam Deck portable**, choisir une exécution terminée avec succès et télécharger l'artifact `artemis-steamos-x86_64`. Son ZIP contient l'archive binaire, les sources correspondantes et `SHA256SUMS` : en extraire d'abord `artemis-steamos-x86_64.tar.gz`. Aucune GitHub Release n'est créée par ce workflow.
+Dans le fork GitHub, ouvrir **Actions → Steam Deck portable**, choisir une exécution terminée avec succès et télécharger l'artifact **artemis-steamos-x86_64**. Son ZIP contient `artemis-steamos-x86_64.tar.gz`, `artemis-steamos-sources.tar.gz` et `SHA256SUMS` : en extraire d'abord ces fichiers. Aucune GitHub Release n'est créée par ce workflow.
 
 Sur le Steam Deck en Desktop Mode, dans Konsole, depuis le dossier contenant l'archive :
 
@@ -102,7 +105,7 @@ Pour Gaming Mode, ajouter le lanceur `~/.local/bin/artemis-steamos` à Steam en 
 7. Tester AV1 si le matériel annonce le décodage correspondant. Un repli logiciel ne valide pas le décodage matériel AV1.
 8. Tester Apollo et Sunshine séparément si les deux sont utilisés, puis reconnexion et reprise après veille.
 
-Le chemin Vulkan Video natif est distinct de VA-API avec rendu Vulkan. L'audit du commit de référence a relevé des callbacks de verrouillage de files Vulkan sans effet et une initialisation incomplète des files de décodage dans `plvk.cpp`. Ce sont des limites **préexistantes**, non corrigées par le packaging ; ce chemin n'est pas déclaré validé. Le contournement préprocesseur de `AV_PIX_FMT_P410` du même fichier rend aussi le mode 10 bits 4:4:4 suspect. Aucune correction fonctionnelle de ces points n'est présentée comme éprouvée sans essais GPU.
+Le chemin Vulkan Video natif est distinct de VA-API avec rendu Vulkan. L'audit du commit de référence a relevé des callbacks de verrouillage de files Vulkan sans effet et une initialisation des seules files génériques dans `plvk.cpp`. Ces éléments **préexistants** présentent un risque pour le décodage Vulkan Video natif ; l'inspection seule ne démontre pas une panne sur le Deck ni une régression de ce package. Le contournement préprocesseur de `AV_PIX_FMT_P410` du même fichier mérite aussi une vérification du mode 10 bits 4:4:4. Ces chemins ne sont pas déclarés validés et le packaging n'en modifie pas le comportement.
 
 ## Diagnostics et dépannage
 
@@ -142,7 +145,7 @@ Le script retire les fichiers installés, les anciennes copies du package et ses
 
 ## Workflow et critères de validation
 
-Le workflow indépendant est `.github/workflows/steamdeck-build.yml`. Il ne remplace pas les pipelines Windows et macOS. Il publie des artifacts, avec des permissions minimales, et possède un déclencheur manuel `workflow_dispatch`. GitHub exige que ce déclencheur soit enregistré sur la branche par défaut pour l'utiliser normalement ; l'intégration de la pull request nécessite l'accord du propriétaire.
+Le workflow indépendant est `.github/workflows/steamdeck-build.yml`. Il ne remplace pas les pipelines Windows et macOS. Il publie des artifacts, avec des permissions minimales, et possède un déclencheur manuel `workflow_dispatch`. GitHub exige que ce déclencheur soit enregistré sur la branche par défaut pour l'utiliser normalement. Les déclencheurs de branche et de pull request permettent aussi de vérifier les changements avant intégration.
 
 Une fois le workflow disponible sur la branche par défaut :
 
@@ -155,12 +158,12 @@ gh run download NUMERO_D_EXECUTION --repo Axel-al/temp
 
 Les validations prévues contrôlent : les moteurs sélectionnés par qmake, les codecs FFmpeg, les fichiers requis, l'architecture x86_64, les entrées ELF `NEEDED`, `RPATH`/`RUNPATH`, la limite GLIBC, la résolution des dépendances et les plugins Qt. Le lancement minimal utilise un affichage virtuel et ne contacte aucun hôte de streaming. Il ne remplace pas les essais de connexion, d'accélération, de HDR, d'audio ou de manette. Consulter les rapports de l'exécution précise téléchargée pour ses résultats effectifs.
 
-Les versions applicatives sont fixées. Le manifeste enregistre aussi les versions exactes des paquets Ubuntu copiés, ainsi que les sommes SHA-256 des ELF. La mise à jour des paquets de sécurité du système de compilation peut changer un build ultérieur ; le package n'est donc pas annoncé reproductible bit à bit uniquement parce que ses versions principales sont fixées.
+Les versions applicatives, le conteneur et la date du snapshot Ubuntu sont fixés. Le manifeste enregistre les versions exactes des paquets Ubuntu copiés ainsi que les sommes SHA-256 des ELF. La mise à jour de cette base se fait explicitement dans le workflow. Ces contraintes facilitent la reconstruction, sans constituer une preuve de reproductibilité bit à bit de l'ensemble des outils et archives utilisés.
 
 ## Licences et sources correspondantes
 
 Artemis est fourni sous GPL v3. Qt comporte des composants LGPL v3/GPL v3 et des notices tierces ; FFmpeg et libplacebo utilisent notamment LGPL 2.1 ou ultérieure ; SDL2 et SDL2_ttf utilisent la licence zlib. Les licences exactes de chaque fichier ou sous-composant et les notices accompagnant le package prévalent sur ce résumé. Voir les [licences Qt](https://doc.qt.io/qt-6.8/licensing.html) et les [conditions de redistribution FFmpeg](https://ffmpeg.org/legal.html).
 
-Les bibliothèques partagées sont conservées, sans activation de composants FFmpeg `nonfree`. Les notices, copyrights et le manifeste sont livrés avec l'archive. Les sources correspondantes et scripts de construction sont livrés dans l'artifact de sources de la même exécution : conserver cet artifact avec le binaire en cas de redistribution, notamment les archives des dépendances, les sources Artemis et de ses sous-modules, les sources Qt correspondantes et les sources des paquets redistribués.
+Les bibliothèques applicatives partagées sont conservées, sans activation de composants FFmpeg `nonfree`. FFmpeg est construit avec `--enable-version3`, sous LGPL v3 pour cette configuration. Les notices, copyrights et le manifeste sont livrés avec l'archive. Les sources correspondantes et scripts de construction se trouvent dans `artemis-steamos-sources.tar.gz`, fourni **dans le même artifact** que le binaire : conserver cette archive en cas de redistribution, notamment les archives des dépendances, les sources Artemis et de ses sous-modules, les sources Qt correspondantes et les sources des paquets redistribués. Les notices et sources de glslang et SPIRV-Tools sont incluses explicitement, car leur liaison statique ne les fait pas apparaître comme dépendances ELF séparées.
 
 Un simple lien vers la page d'accueil d'une bibliothèque ou une copie de sa licence ne remplace pas la mise à disposition de ses sources correspondantes. Toute modification ultérieure d'une dépendance doit être enregistrée dans les sources et instructions de construction associées. La rétention des artifacts GitHub est limitée ; une redistribution durable nécessite de conserver et rendre accessibles ensemble binaires et sources.

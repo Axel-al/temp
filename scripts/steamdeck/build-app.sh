@@ -6,7 +6,7 @@ export PKG_CONFIG_PATH="$DEPS_PREFIX/lib/pkgconfig"
 export LD_LIBRARY_PATH="$DEPS_PREFIX/lib:$QT_ROOT/lib"
 mkdir -p .steamdeck/build .steamdeck/reports
 cd .steamdeck/build
-"$QT_ROOT/bin/qmake6" "$root/artemis.pro" 'QMAKE_CXXFLAGS+=-fPIC' 'QMAKE_CFLAGS+=-fPIC' \
+"$QT_ROOT/bin/qmake6" -r "$root/artemis.pro" 'QMAKE_CXXFLAGS+=-fPIC' 'QMAKE_CFLAGS+=-fPIC' \
   -after 'CONFIG-=debug_and_release' 'CONFIG-=debug' 'CONFIG+=release' 2>&1 | tee ../reports/qmake.log
 for feature in HAVE_FFMPEG HAVE_LIBVA HAVE_LIBVA_X11 HAVE_LIBVA_WAYLAND HAVE_LIBVA_DRM HAVE_DRM HAVE_LIBPLACEBO_VULKAN HAVE_EGL HAS_WAYLAND HAS_X11; do
   grep -q -- "-D$feature\b" app/Makefile || { echo "Missing required feature: $feature"; exit 1; }

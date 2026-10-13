@@ -6,9 +6,16 @@ trap 'rm -rf -- "$work"' EXIT
 cp -a dist/artemis-steamos-x86_64 "$work/package"
 mkdir -p "$work/home" "$work/runtime"
 chmod 700 "$work/runtime"
+as_user=()
+if [[ $(id -u) == 0 ]]; then
+  # CI's container builds as root; runtime/install tests must exercise a normal user.
+  chmod 755 "$work"
+  chown -R nobody:nogroup "$work/home" "$work/runtime"
+  as_user=(runuser -u nobody --)
+fi
 # A different path, clean home, no SDK environment and deliberately hostile Qt paths.
 run_clean() {
-  env -i PATH=/usr/bin:/bin HOME="$work/home" XDG_RUNTIME_DIR="$work/runtime" \
+  "${as_user[@]}" env -i PATH=/usr/bin:/bin HOME="$work/home" XDG_RUNTIME_DIR="$work/runtime" \
     QT_PLUGIN_PATH=/nonexistent QML_IMPORT_PATH=/nonexistent LD_LIBRARY_PATH=/nonexistent \
     "$@"
 }

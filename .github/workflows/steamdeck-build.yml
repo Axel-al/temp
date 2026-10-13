@@ -31,7 +31,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Install tools from a dated Ubuntu snapshot
+      - name: Configure the dated Ubuntu snapshot and certificate trust
         run: |
           cat > /etc/apt/sources.list <<'EOF'
           deb https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy main universe multiverse restricted
@@ -43,9 +43,22 @@ jobs:
           EOF
           # Bootstrap trust using the runner CA bundle, retaining TLS/signature checks.
           apt-get -o Acquire::https::CaInfo=/run/host-ca-certificates.crt update
-          apt-get -o Acquire::https::CaInfo=/run/host-ca-certificates.crt install -y --no-install-recommends ca-certificates
+          apt-get -o Acquire::https::CaInfo=/run/host-ca-certificates.crt install -y --no-install-recommends ca-certificates zstd git python3
           apt-get update
-          apt-get install -y --no-install-recommends \
+          # Keep verified .deb archives for subsequent clean container builds.
+          : > /etc/apt/apt.conf.d/docker-clean
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: apt-cache
+        with:
+          path: /var/cache/apt/archives
+          key: steamos-apt-jammy-20250901-v1
+      - name: Install build and validation tools
+        run: |
+          python3 scripts/steamdeck/install-build-tools.py \
             git curl build-essential cmake ninja-build pkg-config python3-pip python3-venv \
             nasm patchelf pax-utils file binutils xz-utils zstd zip unzip \
             libssl-dev libopus-dev libdav1d-dev libva-dev libvdpau-dev \
@@ -60,10 +73,11 @@ jobs:
             libxcb-xfixes0-dev libxcb-sync-dev libxcb-dri3-dev \
             libfontconfig1-dev libfreetype6-dev libharfbuzz-dev libibus-1.0-dev \
             libspa-0.2-modules xvfb xauth fonts-dejavu-core mesa-utils vulkan-tools vainfo
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: steps.apt-cache.outputs.cache-hit != 'true'
         with:
-          persist-credentials: false
-          fetch-depth: 0
+          path: /var/cache/apt/archives
+          key: ${{ steps.apt-cache.outputs.cache-primary-key }}
       - name: Prepare pinned application submodules
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
