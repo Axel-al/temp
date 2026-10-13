@@ -26,15 +26,24 @@ for platform in offscreen xcb; do
   set +e
   if [[ $platform == xcb ]]; then
     run_clean xvfb-run -a env QT_QPA_PLATFORM=xcb QT_QUICK_BACKEND=software QT_DEBUG_PLUGINS=1 \
-      timeout --signal=TERM --kill-after=5 20 "$work/package/artemis" > ".steamdeck/reports/gui-$platform.log" 2>&1
+      timeout --verbose --signal=TERM --kill-after=5 20 "$work/package/artemis" > ".steamdeck/reports/gui-$platform.log" 2>&1
   else
     run_clean env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_DEBUG_PLUGINS=1 \
-      timeout --signal=TERM --kill-after=5 20 "$work/package/artemis" > ".steamdeck/reports/gui-$platform.log" 2>&1
+      timeout --verbose --signal=TERM --kill-after=5 20 "$work/package/artemis" > ".steamdeck/reports/gui-$platform.log" 2>&1
   fi
   status=$?
   set -e
   cat ".steamdeck/reports/gui-$platform.log"
-  [[ $status == 124 ]] || { echo "GUI exited before the 20-second smoke window: $status"; exit 1; }
+  # SDL can handle SIGTERM without closing the Qt main window. Accept SIGKILL
+  # only when timeout itself reports the deadline and its escalation; an
+  # unexplained status 137 (for example an OOM kill) must still fail.
+  grep -q '^timeout: sending signal TERM to command' ".steamdeck/reports/gui-$platform.log"
+  if [[ $status == 137 ]]; then
+    grep -q '^timeout: sending signal KILL to command' ".steamdeck/reports/gui-$platform.log"
+  elif [[ $status != 124 ]]; then
+    echo "GUI exited unexpectedly: $status"
+    exit 1
+  fi
   if grep -Ei 'QQmlApplicationEngine failed|module .* is not installed|error while loading shared libraries|Could not load the Qt platform plugin|Cannot load library.*(not found|undefined symbol)' ".steamdeck/reports/gui-$platform.log"; then
     exit 1
   fi
