@@ -29,6 +29,13 @@ HOST_PATTERNS = [
     r"libva(?:-.*)?\.so\..*", r"libdrm(?:_.*)?\.so\..*", r"libgbm\.so\..*",
     r"lib(?:GL|EGL|GLESv1_CM|GLESv2|GLX|OpenGL|GLdispatch)(?:_.*)?\.so\..*",
     r"libvulkan\.so\..*", r"libvdpau\.so\..*",
+    # Mesa's current WSI can require newer Wayland/XCB entry points. Older
+    # copies would interpose on the host driver even though Mesa stays external.
+    r"libwayland(?:-.*)?\.so\..*",
+    r"lib(?:X11(?:-xcb)?|Xext|Xfixes|Xrender|xshmfence)\.so\..*",
+    # xcb-util helpers are independent libraries used by Qt, not libxcb's
+    # protocol interfaces. Keep those helpers in the application package.
+    r"libxcb(?:-(?!(?:cursor|icccm|image|keysyms|render-util|util)\.so)[a-z0-9-]+)?\.so\..*",
 ]
 HOST_RE = re.compile("(?:" + "|".join(HOST_PATTERNS) + ")$")
 REQUIRED_LIBRARIES = [
@@ -140,6 +147,10 @@ def main() -> None:
             return cache[name]
         raise RuntimeError(f"Required dynamically loaded library unavailable: {name}")
 
+    # Retain the requested FFmpeg runtime even when --as-needed removes an
+    # otherwise unused library from the application's direct NEEDED entries.
+    for name in ("libavcodec.so.60", "libavformat.so.60", "libavutil.so.58", "libswscale.so.7"):
+        copy_library(resolve_library(name))
     # SDL and Qt load these by name, so they never appear in the application's
     # DT_NEEDED entries. PulseAudio works with SteamOS's PipeWire Pulse server.
     for name in ("libssl.so.3", "libcrypto.so.3", "libasound.so.2", "libpulse.so.0",
@@ -198,6 +209,26 @@ def main() -> None:
         copy_file(REPO / "docs/steamdeck.md", OUT / "README.md")
 
     package_records: dict[str, dict] = {}
+
+    def record_system_package(owner: str) -> None:
+        if owner in package_records:
+            return
+        fields = run("dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${source:Package}\t${source:Version}\n", owner).strip().split("\t")
+        if len(fields) != 4 or not all(fields):
+            raise RuntimeError(f"Incomplete source provenance for {owner}: {fields}")
+        notice = Path("/usr/share/doc") / owner.split(":")[0] / "copyright"
+        if not notice.is_file():
+            raise RuntimeError(f"Missing required copyright notice for {owner}")
+        safe_name = owner.replace(":", "_")
+        shutil.copy2(notice, OUT / "share/licenses" / f"{safe_name}.copyright")
+        package_records[owner] = dict(zip(("binary_package", "binary_version", "source_package", "source_version"), fields))
+
+    # The Jammy glslang backend uses static archives. They do not appear in
+    # ldd, but their exact sources and copyright notices must accompany the
+    # resulting FFmpeg/libplacebo binaries just like shared dependencies.
+    static_packages = ["glslang-dev", "spirv-tools"]
+    for owner in static_packages:
+        record_system_package(owner)
     files = []
     for relative, original in sorted(origins.items()):
         target = OUT / relative
@@ -224,14 +255,7 @@ def main() -> None:
                     break
             if not owner:
                 raise RuntimeError(f"Cannot identify redistribution origin of {original}")
-            if owner not in package_records:
-                fields = run("dpkg-query", "-W", "-f=${binary:Package}\t${Version}\t${source:Package}\t${source:Version}\n", owner).strip().split("\t")
-                notice = Path("/usr/share/doc") / owner.split(":")[0] / "copyright"
-                if not notice.is_file():
-                    raise RuntimeError(f"Missing required copyright notice for {owner}")
-                safe_name = owner.replace(":", "_")
-                shutil.copy2(notice, OUT / "share/licenses" / f"{safe_name}.copyright")
-                package_records[owner] = dict(zip(("binary_package", "binary_version", "source_package", "source_version"), fields))
+            record_system_package(owner)
         files.append({"path": relative, "origin": str(original), "component": owner,
                       "sha256": hashlib.sha256(target.read_bytes()).hexdigest()})
     manifest = {
@@ -239,6 +263,7 @@ def main() -> None:
         "glibcxx_ceiling": "3.4.30", "cxxabi_ceiling": "1.3.13",
         "qt_version": "6.8.3", "host_sonames": sorted(host_required),
         "host_library_patterns": HOST_PATTERNS, "required_libraries": REQUIRED_LIBRARIES,
+        "statically_linked_packages": static_packages,
         "system_packages": sorted(package_records.values(), key=lambda item: item["binary_package"]),
         "elf_files": files,
     }

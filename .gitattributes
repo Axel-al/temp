@@ -1,0 +1,3 @@
+.github/workflows/steamdeck-build.yml text eol=lf
+scripts/steamdeck/** text eol=lf
+docs/steamdeck.md text eol=lf

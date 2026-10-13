@@ -10,7 +10,8 @@ export PATH="$root/.steamdeck/tools/bin:$DEPS_PREFIX/bin:$PATH"
 export PKG_CONFIG_PATH="$DEPS_PREFIX/lib/pkgconfig"
 export LD_LIBRARY_PATH="$DEPS_PREFIX/lib"
 aqt install-qt linux desktop 6.8.3 linux_gcc_64 -O "$root/.steamdeck/qt" \
-  --archives qtbase qtdeclarative qtsvg qtwayland qtshadertools qtimageformats qttranslations icu
+  --archives qtbase qtdeclarative qtsvg qtwayland qttranslations icu \
+  -m qtshadertools qtimageformats
 
 checkout() {
   local name=$1 url=$2 revision=$3
