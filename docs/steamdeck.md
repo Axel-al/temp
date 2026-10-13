@@ -69,7 +69,7 @@ Les chemins ELF relatifs à `$ORIGIN` permettent de déplacer le dossier complet
 
 ## Télécharger et installer
 
-Dans le fork GitHub, ouvrir **Actions → Steam Deck Build**, choisir une exécution terminée avec succès et télécharger l'artifact binaire. Les artifacts GitHub sont généralement livrés dans un ZIP : en extraire d'abord `artemis-steamos-x86_64.tar.gz`. Aucune GitHub Release n'est créée par ce workflow.
+Dans le fork GitHub, ouvrir **Actions → Steam Deck portable**, choisir une exécution terminée avec succès et télécharger l'artifact `artemis-steamos-x86_64`. Son ZIP contient l'archive binaire, les sources correspondantes et `SHA256SUMS` : en extraire d'abord `artemis-steamos-x86_64.tar.gz`. Aucune GitHub Release n'est créée par ce workflow.
 
 Sur le Steam Deck en Desktop Mode, dans Konsole, depuis le dossier contenant l'archive :
 

@@ -142,7 +142,11 @@ def main() -> None:
 
     # SDL and Qt load these by name, so they never appear in the application's
     # DT_NEEDED entries. PulseAudio works with SteamOS's PipeWire Pulse server.
-    for name in ("libssl.so.3", "libcrypto.so.3", "libasound.so.2", "libpulse.so.0", "libXss.so.1"):
+    for name in ("libssl.so.3", "libcrypto.so.3", "libasound.so.2", "libpulse.so.0",
+                 "libX11.so.6", "libXext.so.6", "libXcursor.so.1", "libXrandr.so.2",
+                 "libXinerama.so.1", "libXi.so.6", "libXfixes.so.3", "libXrender.so.1",
+                 "libXss.so.1", "libdbus-1.so.3", "libwayland-client.so.0",
+                 "libwayland-cursor.so.0", "libwayland-egl.so.1", "libxkbcommon.so.0"):
         copy_library(resolve_library(name))
     build_env = dict(os.environ, LD_LIBRARY_PATH=":".join(map(str, [OUT / "lib", *search_dirs])))
     processed: set[Path] = set()

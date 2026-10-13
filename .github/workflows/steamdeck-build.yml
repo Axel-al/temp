@@ -20,7 +20,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     # The runner only hosts Docker. Every compiler and packaging command runs in Jammy.
-    container: ubuntu:jammy-20250819@sha256:4e0171b9275e12d375863f2b3ae9ce00a4c53ddda176bd55868df97ac6f21a6e
+    container:
+      image: ubuntu:jammy-20250819@sha256:4e0171b9275e12d375863f2b3ae9ce00a4c53ddda176bd55868df97ac6f21a6e
+      volumes:
+        - /etc/ssl/certs/ca-certificates.crt:/run/host-ca-certificates.crt:ro
     env:
       DEBIAN_FRONTEND: noninteractive
       QT_VERSION: 6.8.3
@@ -38,11 +41,9 @@ jobs:
           deb-src https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy-updates main universe multiverse restricted
           deb-src https://snapshot.ubuntu.com/ubuntu/20250901T000000Z jammy-security main universe multiverse restricted
           EOF
-          # Bootstrap CA certificates from the image's signed HTTP apt transport.
-          sed -i 's|https://snapshot|http://snapshot|' /etc/apt/sources.list
-          apt-get update
-          apt-get install -y --no-install-recommends ca-certificates
-          sed -i 's|http://snapshot|https://snapshot|' /etc/apt/sources.list
+          # Bootstrap trust using the runner CA bundle, retaining TLS/signature checks.
+          apt-get -o Acquire::https::CaInfo=/run/host-ca-certificates.crt update
+          apt-get -o Acquire::https::CaInfo=/run/host-ca-certificates.crt install -y --no-install-recommends ca-certificates
           apt-get update
           apt-get install -y --no-install-recommends \
             git curl build-essential cmake ninja-build pkg-config python3-pip python3-venv \
