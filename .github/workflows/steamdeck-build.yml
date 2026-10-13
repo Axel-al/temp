@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: steamdeck-${{ github.ref }}
+  group: steamdeck-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -49,7 +49,7 @@ jobs:
             git curl build-essential cmake ninja-build pkg-config python3-pip python3-venv \
             nasm patchelf pax-utils file binutils xz-utils zstd zip unzip \
             libssl-dev libopus-dev libdav1d-dev libva-dev libvdpau-dev \
-            libdrm-dev libgbm-dev libvulkan-dev libshaderc-dev glslang-dev liblcms2-dev \
+            libdrm-dev libgbm-dev libvulkan-dev glslang-dev spirv-tools liblcms2-dev \
             libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
             libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev wayland-protocols \
             libasound2-dev libpulse-dev libpipewire-0.3-dev libdbus-1-dev libudev-dev \
@@ -73,14 +73,28 @@ jobs:
           echo "QT_ROOT=$GITHUB_WORKSPACE/.steamdeck/qt/6.8.3/gcc_64" >> "$GITHUB_ENV"
           echo "DEPS_PREFIX=$GITHUB_WORKSPACE/.steamdeck/prefix" >> "$GITHUB_ENV"
           echo "ARTEMIS_BINARY=$GITHUB_WORKSPACE/.steamdeck/build/app/artemis" >> "$GITHUB_ENV"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         id: dependencies
         with:
-          path: .steamdeck
+          path: |
+            .steamdeck/prefix
+            .steamdeck/qt
+            .steamdeck/source-archives
+            .steamdeck/reports
           key: steamos-jammy-qt683-${{ hashFiles('scripts/steamdeck/build-deps.sh') }}
       - name: Build pinned dependencies and install Qt
         if: steps.dependencies.outputs.cache-hit != 'true'
         run: bash scripts/steamdeck/build-deps.sh
+      - name: Cache completed dependencies independently of application build
+        if: steps.dependencies.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .steamdeck/prefix
+            .steamdeck/qt
+            .steamdeck/source-archives
+            .steamdeck/reports
+          key: ${{ steps.dependencies.outputs.cache-primary-key }}
       - name: Compile Artemis with required streaming backends
         run: bash scripts/steamdeck/build-app.sh
       - name: Bundle application, plugins and dependency closure

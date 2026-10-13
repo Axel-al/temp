@@ -55,7 +55,7 @@ EOF
 checkout libplacebo https://github.com/haasn/libplacebo.git 9c4b6bbd7a1e223ffdd61affc4e5d463d42d4345
 meson setup .steamdeck/placebo-build .steamdeck/sources/libplacebo \
   --prefix "$DEPS_PREFIX" --libdir lib --buildtype release -Ddefault_library=shared \
-  -Dvulkan=enabled -Dshaderc=enabled -Dglslang=disabled -Dopengl=disabled -Ddemos=false -Dtests=false
+  -Dvulkan=enabled -Dshaderc=disabled -Dglslang=enabled -Dopengl=disabled -Ddemos=false -Dtests=false
 ninja -C .steamdeck/placebo-build -j4
 ninja -C .steamdeck/placebo-build install
 checkout FFmpeg https://github.com/FFmpeg/FFmpeg.git 34277e12e80031c7f89494ba543684bc1dd0be8f
@@ -64,7 +64,7 @@ checkout FFmpeg https://github.com/FFmpeg/FFmpeg.git 34277e12e80031c7f89494ba543
   ./configure --prefix="$DEPS_PREFIX" --libdir="$DEPS_PREFIX/lib" \
     --enable-shared --disable-static --disable-doc --disable-debug \
     --disable-autodetect --enable-pthreads --enable-vaapi --enable-vdpau --enable-vulkan \
-    --enable-libdrm --enable-libdav1d --enable-openssl --enable-version3 \
+    --enable-libdrm --enable-libdav1d --enable-libglslang --enable-openssl --enable-version3 \
     --extra-cflags="-I$DEPS_PREFIX/include" --extra-ldflags="-L$DEPS_PREFIX/lib" \
     2>&1 | tee "$root/.steamdeck/reports/ffmpeg-configure.log"
   make -j4
@@ -78,7 +78,7 @@ for module in qtbase qtdeclarative qtsvg qtwayland qtshadertools qtimageformats 
   curl -fL --retry 3 "$url.sha256" -o ".steamdeck/source-archives/$archive.sha256"
   (cd .steamdeck/source-archives && sha256sum -c "$archive.sha256")
   mkdir -p "$DEPS_PREFIX/share/licenses/Qt/$module"
-  tar -tf ".steamdeck/source-archives/$archive" | grep -Ei '/(LICENSES/|[^/]*(LICENSE|COPYING|COPYRIGHT)[^/]*$)' > ".steamdeck/$module-notices.txt"
+  tar -tf ".steamdeck/source-archives/$archive" | grep -Ei '/(LICENSES/|[^/]*(LICENSE|COPYING|COPYRIGHT)[^/]*$)' | grep -v '/$' > ".steamdeck/$module-notices.txt"
   tar -xf ".steamdeck/source-archives/$archive" -C "$DEPS_PREFIX/share/licenses/Qt/$module" \
     -T ".steamdeck/$module-notices.txt"
 done
