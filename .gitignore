@@ -49,6 +49,9 @@ Thumbs.db
 
 # Dependencies
 node_modules/
+.steamdeck/
+dist/
+scripts/steamdeck/__pycache__/
 
 # Generated QML cache
 *qmlcache*
